@@ -19,6 +19,7 @@
 
 #define SPL06_I2C_ADDR                         0x76
 #define SPL06_DEFAULT_CHIP_ID                  0x10
+#define SPA06_DEFAULT_CHIP_ID                  0x11    // SPA06-003 / SPL07-003
 
 #define SPL06_PRESSURE_START_REG               0x00
 #define SPL06_PRESSURE_LEN                     3       // 24 bits, 3 bytes
@@ -40,8 +41,10 @@
 #define SPL06_CHIP_ID_REG                      0x0D    // Chip ID Register
 #define SPL06_CALIB_COEFFS_START               0x10
 #define SPL06_CALIB_COEFFS_END                 0x21
+#define SPA06_CALIB_COEFFS_END                 0x24    // SPA06 adds c31/c40
 
 #define SPL06_CALIB_COEFFS_LEN                 (SPL06_CALIB_COEFFS_END - SPL06_CALIB_COEFFS_START + 1)
+#define SPA06_CALIB_COEFFS_LEN                 (SPA06_CALIB_COEFFS_END - SPL06_CALIB_COEFFS_START + 1)
 
 // TEMPERATURE_CFG_REG
 #define SPL06_TEMP_USE_EXT_SENSOR              (1<<7)

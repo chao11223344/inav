@@ -43,10 +43,14 @@ typedef struct {
     int16_t c20;
     int16_t c21;
     int16_t c30;
+    int16_t c31;    // SPA06 only
+    int16_t c40;    // SPA06 only
 } spl06_coeffs_t;
 
 
 spl06_coeffs_t spl06_cal;
+// true if the detected device is an SPA06/SPL07 (extended coefficients), false for SPL06
+static bool spl06_is_spa06 = false;
 // uncompensated pressure and temperature
 static int32_t spl06_pressure_raw = 0;
 static int32_t spl06_temperature_raw = 0;
@@ -137,8 +141,10 @@ static float spl06_compensate_pressure(int32_t pressure_raw, int32_t temperature
     const float p_raw_sc = (float)pressure_raw / spl06_raw_value_scale_factor(SPL06_PRESSURE_OVERSAMPLING);
     const float t_raw_sc = (float)temperature_raw / spl06_raw_value_scale_factor(SPL06_TEMPERATURE_OVERSAMPLING);
 
-    const float pressure_cal = (float)spl06_cal.c00 + p_raw_sc * ((float)spl06_cal.c10 + p_raw_sc * ((float)spl06_cal.c20 + p_raw_sc * spl06_cal.c30));
-    const float p_temp_comp = t_raw_sc * ((float)spl06_cal.c01 + p_raw_sc * ((float)spl06_cal.c11 + p_raw_sc * spl06_cal.c21));
+    // SPA06 adds the higher-order terms c40 and c31. For SPL06 these coefficients
+    // are zeroed during calibration read, so the formula reduces to the SPL06 one.
+    const float pressure_cal = (float)spl06_cal.c00 + p_raw_sc * ((float)spl06_cal.c10 + p_raw_sc * ((float)spl06_cal.c20 + p_raw_sc * ((float)spl06_cal.c30 + p_raw_sc * spl06_cal.c40)));
+    const float p_temp_comp = t_raw_sc * ((float)spl06_cal.c01 + p_raw_sc * ((float)spl06_cal.c11 + p_raw_sc * ((float)spl06_cal.c21 + p_raw_sc * spl06_cal.c31)));
 
     return pressure_cal + p_temp_comp;
 }
@@ -166,6 +172,11 @@ static bool deviceDetect(busDevice_t * busDev)
         delay(100);
         bool ack = busRead(busDev, SPL06_CHIP_ID_REG, &chipId);
         if (ack && chipId == SPL06_DEFAULT_CHIP_ID) {
+            spl06_is_spa06 = false;
+            return true;
+        }
+        if (ack && chipId == SPA06_DEFAULT_CHIP_ID) {
+            spl06_is_spa06 = true;
             return true;
         }
     };
@@ -178,9 +189,10 @@ static bool read_calibration_coefficients(baroDev_t *baro) {
     if (!(busRead(baro->busDev, SPL06_MODE_AND_STATUS_REG, &sstatus) && (sstatus & SPL06_MEAS_CFG_COEFFS_RDY)))
         return false;   // error reading status or coefficients not ready
 
-    uint8_t caldata[SPL06_CALIB_COEFFS_LEN];
+    uint8_t caldata[SPA06_CALIB_COEFFS_LEN];
+    const uint8_t caldata_len = spl06_is_spa06 ? SPA06_CALIB_COEFFS_LEN : SPL06_CALIB_COEFFS_LEN;
 
-    if (!busReadBuf(baro->busDev, SPL06_CALIB_COEFFS_START, (uint8_t *)&caldata, SPL06_CALIB_COEFFS_LEN)) {
+    if (!busReadBuf(baro->busDev, SPL06_CALIB_COEFFS_START, (uint8_t *)&caldata, caldata_len)) {
         return false;
     }
 
@@ -193,6 +205,15 @@ static bool read_calibration_coefficients(baroDev_t *baro) {
     spl06_cal.c20 = ((uint16_t)caldata[12] << 8) | (uint16_t)caldata[13];
     spl06_cal.c21 = ((uint16_t)caldata[14] << 8) | (uint16_t)caldata[15];
     spl06_cal.c30 = ((uint16_t)caldata[16] << 8) | (uint16_t)caldata[17];
+
+    if (spl06_is_spa06) {
+        // c31, c40 are 12-bit two's complement, stored in regs 0x22..0x24
+        spl06_cal.c31 = (caldata[18] & 0x80 ? 0xF000 : 0) | ((uint16_t)caldata[18] << 4) | (((uint16_t)caldata[19] & 0xF0) >> 4);
+        spl06_cal.c40 = (caldata[19] & 0x8 ? 0xF000 : 0) | (((uint16_t)caldata[19] & 0x0F) << 8) | (uint16_t)caldata[20];
+    } else {
+        spl06_cal.c31 = 0;
+        spl06_cal.c40 = 0;
+    }
 
     return true;
 }

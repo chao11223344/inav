@@ -25,6 +25,10 @@
 
 #include "fc/fc_init.h"
 
+#ifdef USE_EXTERNAL_WATCHDOG
+#include "drivers/external_watchdog.h"
+#endif
+
 #include "scheduler/scheduler.h"
 
 #if defined(SITL_BUILD)
@@ -74,6 +78,9 @@ int main(void)
         serialProxyProcess();
 #endif
         scheduler();
+#ifdef USE_EXTERNAL_WATCHDOG
+        externalWatchdogPoll();
+#endif
         processLoopback();
     }
 }

@@ -33,6 +33,10 @@
 #include "drivers/nvic.h"
 #include "drivers/time.h"
 
+#ifdef USE_EXTERNAL_WATCHDOG
+#include "drivers/external_watchdog.h"
+#endif
+
 // cycles per microsecond, this is deliberately uint32_t to avoid type conversions
 // This is not static so system.c can set it up for us.
 uint32_t usTicks = 0;
@@ -59,6 +63,9 @@ void SysTick_Handler(void)
         sysTickPending = 0;
         (void)(SysTick->CTRL);
     }
+#ifdef USE_EXTERNAL_WATCHDOG
+    externalWatchdogStartupTick();
+#endif
 #ifdef USE_HAL_DRIVER
     // used by the HAL for some timekeeping and timeouts, should always be 1ms
     HAL_IncTick();

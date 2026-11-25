@@ -46,6 +46,10 @@
 #include "drivers/time.h"
 #include "drivers/usb_msc.h"
 
+#ifdef USE_EXTERNAL_WATCHDOG
+#include "drivers/external_watchdog.h"
+#endif
+
 #if defined(STM32F4)
 #include "usb_core.h"
 #include "usbd_cdc_vcp.h"
@@ -140,9 +144,16 @@ bool mscCheckButton(void)
 void mscWaitForButton(void)
 {
     // In order to exit MSC mode simply disconnect the board, or push the button again.
-    while (mscCheckButton());
+    while (mscCheckButton()) {
+#ifdef USE_EXTERNAL_WATCHDOG
+        externalWatchdogPoll();
+#endif
+    }
     delay(DEBOUNCE_TIME_MS);
     while (true) {
+#ifdef USE_EXTERNAL_WATCHDOG
+        externalWatchdogPoll();
+#endif
         asm("NOP");
         if (mscCheckButton()) {
             delay(1);
